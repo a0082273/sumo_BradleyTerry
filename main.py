@@ -1,6 +1,3 @@
-#bt_model.RでbashoId読み込むようになってない
-#201801でoutputに十両の碧山がいる
-#不戦勝を消すんじゃなく、0, 1以外にしといて、あとから消したり使ったりできるようにする
 import pandas as pd
 import re
 import sys
@@ -32,20 +29,24 @@ def cleansing(day_torikumi):
         torikumi['e_rikishi'] = torikumi['e_rikishi'][:num_str.start()]
 
         torikumi['e_win'] = ord(torikumi['e_win'])
-        if torikumi['e_win'] == 9675:
-            torikumi['e_win'] = 1
-        elif torikumi['e_win'] == 9679:
-            torikumi['e_win'] = 0
-        elif torikumi['e_win'] == 9632 or torikumi['e_win'] == 9633:
-            torikumi['e_win'] = -1
+        if torikumi['e_win'] == 9675: #勝ち
+            torikumi['e_win'] = 1.0
+        elif torikumi['e_win'] == 9679: #負け
+            torikumi['e_win'] = 0.0
+        elif torikumi['e_win'] == 9633: #不戦勝
+            torikumi['e_win'] = 1.01
+        elif torikumi['e_win'] == 9632: #不戦敗
+            torikumi['e_win'] = -0.1
 
         torikumi['w_win'] = ord(torikumi['w_win'])
         if torikumi['w_win'] == 9675:
-            torikumi['w_win'] = 1
+            torikumi['w_win'] = 1.0
         elif torikumi['w_win'] == 9679:
-            torikumi['w_win'] = 0
-        elif torikumi['w_win'] == 9632 or torikumi['w_win'] == 9633:
-            torikumi['w_win'] = -1
+            torikumi['w_win'] = 0.0
+        elif torikumi['w_win'] == 9633:
+            torikumi['w_win'] = 1.01
+        elif torikumi['w_win'] == 9632:
+            torikumi['w_win'] = -0.1
 
         num_str = re.search(num, torikumi['w_rikishi'])
         torikumi['w_rikishi'] = torikumi['w_rikishi'][:num_str.start()]
@@ -69,8 +70,6 @@ def transform_data_for_btmodel():
         day_torikumi = day_torikumi.drop(['e_banduke', 'kimarite', 'w_banduke'], axis=1)
         day_torikumi = day_torikumi.loc[:, ['e_rikishi', 'w_rikishi', 'e_win', 'w_win']]
 
-        day_torikumi = day_torikumi[day_torikumi['e_win'] != -1]
-
         # for same level in BradleyTerry2
         day_torikumi_inv = day_torikumi.loc[:, ['w_rikishi', 'e_rikishi', 'w_win', 'e_win']]
         day_torikumi_inv.columns = ['e_rikishi', 'w_rikishi', 'e_win', 'w_win']
@@ -85,53 +84,65 @@ def transform_data_for_btmodel():
             basho_torikumi = basho_torikumi.append(day_torikumi)
     basho_torikumi = basho_torikumi.reset_index(drop=True)
 
-    # basho_torikumi.to_csv(f'input/torikumi_btmodel_data/{fname[:6]}_bt_all.csv')
-    # 最終日に出場した力士のみに限定（休場力士を除外）
-    not_kyujo_rikishi = day_torikumi['e_rikishi']
-    nkrl = not_kyujo_rikishi.values.tolist()
-    basho_torikumi = basho_torikumi[basho_torikumi['e_rikishi'].isin(nkrl)]
-    basho_torikumi = basho_torikumi[basho_torikumi['w_rikishi'].isin(nkrl)]
+    grouped = basho_torikumi.groupby('e_rikishi')
+    n_win = round(grouped.sum()['e_win']).astype(int)
+    n_lose = round(grouped.sum()['w_win']).astype(int)
+    n_uwin = (grouped.sum()['e_win']*100)%10 #不戦勝
+    n_uwin = n_uwin.astype(int)
+    n_ulose = (grouped.sum()['w_win']*100)%10 #不戦敗
+    n_ulose = n_ulose.astype(int)
+    n_torikumi = round(grouped.sum()['e_win']+grouped.sum()['w_win']).astype(int)
+    n_kyujo = 15-n_torikumi
+    ok_rikishi = n_torikumi[n_torikumi >= 10].index
+    rikishi_status = pd.concat([n_win, n_lose, n_uwin, n_ulose, n_kyujo], axis=1)
+    # rikishi_status = pd.concat([n_win, n_torikumi], axis=1)
+
+    basho_torikumi = basho_torikumi[basho_torikumi['e_rikishi'].isin(ok_rikishi)]
+    basho_torikumi = basho_torikumi[basho_torikumi['w_rikishi'].isin(ok_rikishi)]
     basho_torikumi = basho_torikumi.reset_index(drop=True)
-    basho_torikumi.to_csv(f'input/torikumi_btmodel_data/{fname[:6]}_bt_rm_kyujo.csv')
+    basho_torikumi['e_win'] = basho_torikumi['e_win'].astype(int)
+    basho_torikumi['w_win'] = basho_torikumi['w_win'].astype(int)
+
+    basho_torikumi.to_csv(f'input/torikumi_btmodel_data/{fname[:6]}_bt.csv')
+    rikishi_status.to_csv(f'output/{bashoId}_rikishi_status.csv')
 
 
 
 def bradley_terry():
     print('bradley_terry')
     r = pyper.R()
+    r.assign('bashoId', bashoId)
     r("source(file='bt_model.R')")
 
 
 
-def visualize():
-    print('visualize')
-    # bt_ability = pd.read_csv(f'input/bt_ability/{bashoId}_bt_ability_all.csv', index_col=0)
-    # basho_torikumi = pd.read_csv(f'input/torikumi_btmodel_data/{bashoId}_bt_all.csv', index_col=0)
-    bt_ability = pd.read_csv(f'input/bt_ability/{bashoId}_bt_ability_rm_kyujo.csv', index_col=0)
-    basho_torikumi = pd.read_csv(f'input/torikumi_btmodel_data/{bashoId}_bt_rm_kyujo.csv', index_col=0)
+def transform_data_for_visualize():
+    print('transform_data_for_visualize')
+    bt_ability = pd.read_csv(f'input/bt_ability/{bashoId}_bt_ability.csv', index_col=0)
+    rikishi_status = pd.read_csv(f'output/{bashoId}_rikishi_status.csv', index_col=0)
 
-    grouped = basho_torikumi.groupby('e_rikishi')
-    n_win = grouped.sum()['e_win']
-    rikishi_status = pd.concat([bt_ability, n_win], axis=1)
-
-    #for rikishi_status_all.csv
-    # rikishi_status = rikishi_status[grouped.sum()['e_win'] + grouped.sum()['w_win'] >= 10]
-
+    rikishi_status = pd.concat([bt_ability, rikishi_status], axis=1)
     rikishi_status = rikishi_status.sort_values('ability', ascending = False)
-    rikishi_status.columns = ['bt_ability', 'bt_s.e.', 'wins']
+    rikishi_status.columns = ['bt_ability', 'bt_s.e.', 'n_win', 'n_lose', 'n_uwin', 'n_ulose', 'n_kyujo']
+    # rikishi_status['bt_ability'] = min_max_normalization(rikishi_status['bt_ability'])
+    rikishi_status['rank'] = range(1, rikishi_status.shape[0]+1)
+    rikishi_status = rikishi_status[rikishi_status.notnull().all(axis=1)]
 
-    # rikishi_status.to_csv(f'output/{bashoId}_rikishi_status_all.csv')
-    rikishi_status.to_csv(f'output/{bashoId}_rikishi_status_rm_kyujo.csv')
+    rikishi_status.to_csv(f'output/{bashoId}_rikishi_status.csv')
 
 
+# def min_max_normalization(x):
+#     x_new = (x - x.min()) / (x.max() - x.min())
+#     return x_new
 
+
+# def z_score_normalization():
 
 
 
 if __name__ == '__main__':
     bashoId = '201801'
-    # remove_kyujo = True
-    # get_torikumi_data()
-    # transform_data_for_btmodel()
+    get_torikumi_data()
+    transform_data_for_btmodel()
     bradley_terry()
-    visualize()
+    transform_data_for_visualize()

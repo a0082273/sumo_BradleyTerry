@@ -1,7 +1,9 @@
 library("BradleyTerry2")
 
-#data <- read.csv("input/torikumi_btmodel_data/201801_bt_all.csv")
-data <- read.csv("input/torikumi_btmodel_data/201801_bt_rm_kyujo.csv")
+#bashoId = "201801" #input from main.py
+
+infile <- paste("input/torikumi_btmodel_data/", bashoId, "_bt.csv", sep="")
+data <- read.csv(infile)
 data[, 1] <- NULL
 
 bt_model <- BTm(
@@ -10,5 +12,5 @@ bt_model <- BTm(
   data = data)
 BTabilities(bt_model)
 
-#write.csv(BTabilities(bt_model), "input/bt_ability/201801_bt_ability_all.csv", quote=FALSE, row.names=TRUE)
-write.csv(BTabilities(bt_model), "input/bt_ability/201801_bt_ability_rm_kyujo.csv", quote=FALSE, row.names=TRUE)
+outfile <- paste("input/bt_ability/", bashoId, "_bt_ability.csv", sep="")
+write.csv(BTabilities(bt_model), outfile, quote=FALSE, row.names=TRUE)
