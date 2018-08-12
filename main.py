@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import re
 import sys
 import pyper
@@ -10,9 +11,14 @@ def get_torikumi_data():
     print('get_torikumi_data')
     url_base = 'https://sports.yahoo.co.jp/sumo/torikumi/stats?'
     for day in range(1, 16):
+    # for day in range(15, 16):
         url = url_base+f'bashoId={bashoId}&day={day}'
         fetched_dataframes = pd.read_html(url)
-        day_torikumi = fetched_dataframes[1]
+        if fetched_dataframes[1].shape[0] > 10: #優勝決定戦がない場合
+            day_torikumi = fetched_dataframes[1]
+        else:
+            day_torikumi = pd.concat([fetched_dataframes[1], fetched_dataframes[2]], axis=0)
+            day_torikumi.reset_index()
         day_torikumi = cleansing(day_torikumi)
         df2csv(url, day_torikumi)
         print(f'basho:{bashoId}   day:{day}')
@@ -26,7 +32,8 @@ def cleansing(day_torikumi):
         torikumi = day_torikumi.iloc[col]
 
         num_str = re.search(num, torikumi['e_rikishi'])
-        torikumi['e_rikishi'] = torikumi['e_rikishi'][:num_str.start()]
+        if num_str != None:
+            torikumi['e_rikishi'] = torikumi['e_rikishi'][:num_str.start()]
 
         torikumi['e_win'] = ord(torikumi['e_win'])
         if torikumi['e_win'] == 9675: #勝ち
@@ -49,7 +56,8 @@ def cleansing(day_torikumi):
             torikumi['w_win'] = -0.1
 
         num_str = re.search(num, torikumi['w_rikishi'])
-        torikumi['w_rikishi'] = torikumi['w_rikishi'][:num_str.start()]
+        if num_str != None:
+            torikumi['w_rikishi'] = torikumi['w_rikishi'][:num_str.start()]
 
     return day_torikumi
 
@@ -141,8 +149,37 @@ def transform_data_for_visualize():
 
 
 if __name__ == '__main__':
-    bashoId = '201801'
-    get_torikumi_data()
-    transform_data_for_btmodel()
-    bradley_terry()
-    transform_data_for_visualize()
+    year_list = [
+        '2001', '2002', '2003', '2004', '2005',
+        '2006', '2007', '2008', '2009', '2010', '2011',
+        '2012', '2013', '2014',
+        '2015', '2016', '2017', '2018'
+    ]
+    basho_list = ['01', '03', '05', '07', '09', '11']
+    for year in year_list:
+        for basho in basho_list:
+            bashoId = year+basho
+            get_torikumi_data()
+            transform_data_for_btmodel()
+            bradley_terry()
+            transform_data_for_visualize()
+
+
+    # year = '2011'
+    # basho_list = ['07', '09', '11']
+    # for basho in basho_list:
+    #     bashoId = year+basho
+    #     get_torikumi_data()
+    #     transform_data_for_btmodel()
+    #     bradley_terry()
+    #     transform_data_for_visualize()
+
+
+    # bashoId = '201709'
+    # get_torikumi_data()
+    # transform_data_for_btmodel()
+    # bradley_terry()
+    # transform_data_for_visualize()
+
+
+#200205, 201103, 201105はデータが丸々ない
