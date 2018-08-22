@@ -2,6 +2,7 @@ trash/
 input/
 output/
 qiita/
+note/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
